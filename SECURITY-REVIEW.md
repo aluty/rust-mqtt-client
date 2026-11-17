@@ -3,6 +3,7 @@
 Reviewed on 2026-11-17. Scope: Rust MQTT parsing, serialization, connection/session
 processing, transport configuration, dependency manifests, and existing tests.
 This is a source review, not a penetration test or a guarantee of security.
+The five implementation findings below have been remediated and regression-tested.
 
 ## Findings and remediation priorities
 
@@ -105,3 +106,37 @@ reported zero vulnerabilities and zero warnings, including yanked-package
 checks, against the 2026-11-15 RustSec database. This result is for the local
 resolution, not every permitted downstream resolution or the deployed native
 OpenSSL library.
+
+The minimum-direct graph also passes `cargo deny check advisories` using the
+repository's two remaining scoped exceptions: the unreachable Tokio AsyncFd
+APIs and the unmaintained-only pin-utils advisory. Neither is an OpenSSL
+exception. Latest-graph advisories, bans, licenses, and sources checks pass;
+expected duplicate-version and minimum-only unused-exception warnings remain.
+An unfiltered audit of the separate 51-package fuzz lockfile also reports zero
+vulnerabilities or warnings.
+
+### Post-change implementation verification
+
+Validation used Windows MSVC, isolated portable Perl, and OpenSSL 3.6.3 built
+from the openssl-src crate. No production vendored-OpenSSL feature or system
+installation was added.
+
+- Rust 1.88: all 473 non-live library/integration tests pass with WebSockets
+  enabled, both for latest-compatible and minimum-direct dependency resolutions.
+- Nine documentation tests and 328 library tests with the temporary
+  omitted-authentication-method compatibility feature pass.
+- Clippy passes with warnings denied for tests and examples, including live-test
+  compilation, both with and without WebSockets.
+- All fuzz harnesses compile against the revised codec. No new fuzz campaign
+  or live-broker interoperability run was performed.
+- Current stable Rust 1.100 checks all targets against minimum-direct dependencies.
+  It emits warnings for existing derive-macro output and redundant package
+  metadata; those unrelated warnings are not suppressed or changed.
+- Formatting and patch whitespace checks pass.
+
+Regression cases cover broker-triggered protocol errors, queue overflow without
+acknowledging the rejected publication, packet-limit negotiation before ordinary
+and enhanced-authentication CONNACK, rejection of a maximum-length header before
+large allocation, exact packet-size boundaries, WebSocket message limits,
+65,535/65,536-byte binary/string boundaries, multibyte UTF-8 byte lengths, invalid
+MQTT string characters, and writer rejection before any packet bytes are emitted.
